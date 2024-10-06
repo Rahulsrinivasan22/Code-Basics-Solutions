@@ -1,0 +1,417 @@
+CODE BASICS project 11
+
+1. List top 5/ bottom 5 constituencies of 2014 and 2019 in terms of voter turnout ratio?
+
+for 2014
+with cte14 as(
+select distinct pc_name,state,sum(total_votes)Total_votes,total_electors,
+cast((sum(total_votes)*1.0/total_electors)*100 as decimal(10,2)) as turn_out_ratio
+from results_2014
+group by pc_name,state,total_electors
+)
+select top 5 * from cte14 order by turn_out_ratio desc,pc_name---highest
+select top 5 * from cte14 order by turn_out_ratio asc,pc_name---lowest
+for 2019
+with cte19 as(
+select distinct pc_name,state,sum(total_votes)Total_votes,total_electors,
+cast((sum(total_votes)*1.0/total_electors)*100 as decimal(10,2)) as turn_out_ratio
+from results_2019
+group by pc_name,state,total_electors
+)
+
+select top 5 * from cte19 order by turn_out_ratio desc,pc_name---highest
+select top 5 * from cte19 order by turn_out_ratio asc,pc_name---lowest
+------------------------------------------------------------------------------------------------
+
+
+2. List top 5 / bottom 5 states of 2014 and 2019 in terms of voter turnout ratio?
+FOR 2014
+with states_total as(
+select state,sum(distinct(total_electors)) as total_electors,
+sum(total_votes) as total_votes,
+cast((sum(total_votes))*1.0/(sum(distinct(total_electors)))*100 as decimal(10,2)) as turn_out_ratio
+from results_2014
+group by state
+)
+select top 5 * from states_total order by turn_out_ratio desc,state---highest
+select top 5 * from states_total order by turn_out_ratio ,state---lowest
+FOR 2019
+with states_total as(
+select state,sum(distinct(total_electors)) as total_electors,
+sum(total_votes) as total_votes,
+cast((sum(total_votes))*1.0/(sum(distinct(total_electors)))*100 as decimal(10,2)) as turn_out_ratio
+from results_2019
+group by state
+)
+
+select top 5 * from states_total order by turn_out_ratio desc,state---highest
+select top 5 * from states_total order by turn_out_ratio ,state--- lowest
+------------------------------------------------------------------------------------------------
+
+3. Which constituencies have elected the same party for two consecutive elections,rank them by % of votes to that winning party in 2019
+
+use Learn
+;with cte1 as(
+select distinct pc_name,state,party,year=2014,SUM(total_votes) as total_votes_14,total_electors,
+ROW_NUMBER()over(partition by pc_name order by sum(total_votes) desc) as rnk
+from results_2014	
+group by pc_name,state,party,total_electors)
+
+,cte2 as(
+select distinct pc_name,state,party,year=2019,sum(total_votes)as total_votes_19,total_electors,
+ROW_NUMBER()over(partition by pc_name order by sum(total_votes) desc) as rnk
+from results_2019
+group by pc_name,state,party,total_electors)
+
+,total_votes_19 as(
+select distinct pc_name,sum(total_votes) as total_vote_of_PC_19
+from results_2019 
+group by pc_name)
+
+,result as(
+select a.pc_name as constituency,a.state as state, b.party as party,
+cast((total_votes_19*1.0/total_vote_of_PC_19)*100 as decimal (10,2))as win_percentage_votes_in_2019,
+ROW_NUMBER()over(partition by a.pc_name order by cast((total_votes_19*1.0/total_vote_of_PC_19)*100 as decimal (10,2)) desc) as rnk1
+from cte1 a
+inner join cte2 b on a.pc_name=b.pc_name and a.state=b.state and a.party=b.party
+inner join total_votes_19 c on a.pc_name=c.pc_name
+--order by win_percentage_votes_in_2019 desc,a.pc_name
+where a.rnk=1 and b.rnk=1
+)
+
+select top 5 constituency,state,party,win_percentage_votes_in_2019 from result where rnk1=1 order by win_percentage_votes_in_2019 desc,constituency
+
+------------------------------------------------------------------------------------------------
+
+4. Which constituencies have voted for different parties in two elections (list top 10 based on difference (2019-2014) in winner vote percentage in two elections)
+
+ 
+use Learn
+
+;with cte1 as(
+select distinct pc_name,state,party,year=2014,SUM(total_votes) as total_votes_14,total_electors,
+ROW_NUMBER()over(partition by pc_name order by sum(total_votes) desc) as rnk
+from results_2014	
+group by pc_name,state,party,total_electors)
+
+,cte2 as(
+select distinct pc_name,state,party,year=2019,sum(total_votes)as total_votes_19,total_electors,
+ROW_NUMBER()over(partition by pc_name order by sum(total_votes) desc) as rnk
+from results_2019
+group by pc_name,state,party,total_electors)
+
+,total_votes_14 as(
+select distinct pc_name,sum(total_votes) as total_vote_of_PC_14
+from results_2014 
+group by pc_name)
+
+
+,total_votes_19 as(
+select distinct pc_name,sum(total_votes) as total_vote_of_PC_19
+from results_2019 
+group by pc_name)
+
+,results as(
+select a.pc_name as constituency,a.state as state, a.party as party_in_2014,b.party as party_in_2019,
+cast((total_votes_19*1.0/total_vote_of_PC_19)*100 as decimal (10,2))as win_percentage_votes_in_2019,
+
+cast((total_votes_14*1.0/total_vote_of_PC_14)*100 as decimal (10,2))as win_percentage_votes_in_2014,
+
+(cast((total_votes_19*1.0/total_vote_of_PC_19)*100 as decimal (10,2))-
+cast((total_votes_14*1.0/total_vote_of_PC_14)*100 as decimal (10,2))) as diff,
+
+row_number()over(partition by a.pc_name order by (cast((total_votes_19*1.0/total_vote_of_PC_19)*100 as decimal (10,2))-
+cast((total_votes_14*1.0/total_vote_of_PC_14)*100 as decimal (10,2))) desc) as rnk1
+from cte1 a
+inner join cte2 b on a.pc_name=b.pc_name and a.state=b.state and a.party<>b.party
+inner join total_votes_19 c on a.pc_name=c.pc_name
+inner join total_votes_14 d on a.pc_name=d.pc_name
+where a.rnk=1 and b.rnk=1)
+
+select top 5 constituency,state, party_in_2014,party_in_2019,win_percentage_votes_in_2014,
+win_percentage_votes_in_2019 ,diff
+from results where rnk1=1 
+order by diff desc,constituency
+
+------------------------------------------------------------------------------------------------
+
+
+5. Top 5 candidates based on margin difference with runners in 2014 and 2019.
+ 
+use Learn
+FOR 2014
+;with cte1 as(
+select distinct pc_name,state,candidate,year=2014,SUM(total_votes) as total_votes_14,total_electors,
+ROW_NUMBER()over(partition by pc_name,state order by sum(total_votes) desc) as rnk
+from results_2014	
+group by pc_name,state,candidate,total_electors)
+,winner as(
+select * from cte1 where rnk=1)
+,runner_up as(
+select * from cte1 where rnk=2)
+,result as(
+select a.pc_name as constituency,a.candidate as candidate ,(a.total_votes_14-b.total_votes_14)as margin,
+DENSE_RANK()over(partition by a.pc_name,a.state order by (a.total_votes_14-b.total_votes_14) desc)as margin_rank
+from winner a 
+inner join runner_up b on a.pc_name=b.pc_name  and a.state=b.state
+)
+select top 5 constituency,candidate,margin from result where margin_rank=1 order by margin desc
+FOR 2019
+use Learn
+
+;with cte1 as(
+select distinct pc_name,state,candidate,year=2019,SUM(total_votes) as total_votes_19,total_electors,
+ROW_NUMBER()over(partition by pc_name,state order by sum(total_votes) desc) as rnk
+from results_2019	
+group by pc_name,state,candidate,total_electors)
+
+,winner as(
+select * from cte1 where rnk=1)
+,runner_up as(
+select * from cte1 where rnk=2)
+
+,result as(
+select a.pc_name as constituency,a.candidate as candidate,(a.total_votes_19-b.total_votes_19)as margin,
+DENSE_RANK()over(partition by a.pc_name,a.state order by (a.total_votes_19-b.total_votes_19) desc)as margin_rank
+from winner a 
+inner join runner_up b on a.pc_name=b.pc_name  and a.state=b.state
+)
+select top 5 constituency,candidate,margin from result where margin_rank=1 order by margin desc
+------------------------------------------------------------------------------------------------
+
+6. % Split of votes of parties between 2014 vs 2019 at national level
+FOR 2014
+;with cte as(
+select distinct party as party,SUM(total_votes)as total_votes_of_party,
+(select sum(total_votes) from results_2014) as total_votes
+from results_2014 
+group by party)
+
+SELECT party,
+CAST((total_votes_of_party * 1.0 / total_votes) * 100 AS DECIMAL(10, 1)) AS split_percentage
+FROM cte 
+order by split_percentage desc
+
+FOR 2019
+;with cte as(
+select distinct party as party,SUM(total_votes)as total_votes_of_party,
+(select sum(total_votes) from results_2019) as total_votes
+from results_2019 
+group by party)
+
+SELECT party,
+CAST((total_votes_of_party * 1.0 / total_votes) * 100 AS DECIMAL(10, 1)) split_percentage
+FROM cte 
+order by split_percentage desc
+ ------------------------------------------------------------------------------------------------
+
+use learn
+go
+
+FOR 2014
+with state_votes as(
+select distinct state,sum(total_votes) total_vote_of_state 
+from results_2014
+group by state)
+
+--select * from state_votes order by state
+
+,party_votes as(
+select distinct party,state as states,SUM(total_votes) total_vote_of_party
+from results_2014
+group by party,state
+)
+
+select party_votes.party,state_votes.state ,
+cast((total_vote_of_party*1.0/total_vote_of_state*100)as decimal(10,2))as  split_percentage
+from party_votes
+inner join state_votes on state_votes.state=party_votes.states
+--where states='maharashtra'
+order by split_percentage desc
+
+
+FOR 2019
+with state_votes as(
+select distinct state,sum(total_votes) total_vote_of_state 
+from results_2019
+group by state)
+
+--select * from state_votes order by state
+
+,party_votes as(
+select distinct party,state as states,SUM(total_votes) total_vote_of_party
+from results_2019
+group by party,state
+)
+
+select party_votes.party,state_votes.state ,
+cast((total_vote_of_party*1.0/total_vote_of_state*100)as decimal(10,2))as  split_percentage
+from party_votes
+inner join state_votes on state_votes.state=party_votes.states
+--where states='maharashtra'
+order by split_percentage desc
+
+
+------------------------------------------------------------------------------------------------
+
+
+8. List top 5 constituencies for two major national parties where they have gained vote
+share in 2019 as compared to 2014.
+
+percentage gain in votes share= vote share in 2019-vote share in 2014
+use learn	
+
+;with pc_total_14 as(
+select distinct pc_name,state,SUM(total_votes) as  total_votes_of_pc
+from results_2014
+--where pc_name='tripura west'
+group by pc_name,state
+)
+,pc_total_19 as(
+select distinct pc_name,state,sum(total_votes) as total_votes_of_pc
+from results_2019
+--where pc_name='tripura west'
+group by pc_name,state
+)
+,party_total_14 as(
+select distinct party,pc_name,sum(total_votes) as total_party_votes
+from results_2014
+where party='BJP'
+group by party,pc_name
+)
+
+
+,party_total_19 as(
+select distinct party,pc_name, sum(total_votes) as total_party_votes
+from results_2019
+where party='BJP' 
+group by party,pc_name
+)
+,result as(
+select a.pc_name as constituency ,a.state as state,d.party as party,
+--a.total_votes_of_pc,c.total_party_votes,
+--b.total_votes_of_pc,d.total_party_votes,
+
+cast((c.total_party_votes)*1.0/a.total_votes_of_pc *100  as decimal(10,2)) as result_14,
+cast((d.total_party_votes)*1.0/b.total_votes_of_pc *100 as decimal(10,2)) as result_19
+from pc_total_14 a
+inner join pc_total_19 b on a.pc_name=b.pc_name and a.state=b.state
+inner join party_total_14 c on a.pc_name=c.pc_name
+inner join party_total_19 d on d.pc_name=b.pc_name
+)
+
+select top 5 state,constituency,party,(result_19-result_14) as gain_in_vote_share
+from result
+order by gain_in_vote_share desc
+
+
+------------------------------------------------------------------------------------------------
+
+
+9. List top 5 constituencies for two major national parties where they have lost vote
+share in 2019 as compared to 2014.
+
+;with pc_total_14 as(
+select distinct pc_name,state,SUM(total_votes) as  total_votes_of_pc
+from results_2014
+--where pc_name='tripura west'
+group by pc_name,state
+)
+,pc_total_19 as(
+select distinct pc_name,state,sum(total_votes) as total_votes_of_pc
+from results_2019
+--where pc_name='tripura west'
+group by pc_name,state
+)
+,party_total_14 as(
+select  party,pc_name,sum(total_votes) as total_party_votes
+from results_2014
+where party='BJP'
+group by party,pc_name
+)
+
+
+
+
+
+,party_total_19 as(
+select  party,pc_name,sum(total_votes) as total_party_votes
+from results_2019
+where party='BJP' 
+group by party,pc_name
+)
+,result as(
+select a.pc_name as constituency ,a.state as state,d.party as party,
+--a.total_votes_of_pc,c.total_party_votes,
+--b.total_votes_of_pc,d.total_party_votes,
+
+cast((c.total_party_votes)*1.0/a.total_votes_of_pc *100  as decimal(10,2)) as result_14,
+cast((d.total_party_votes)*1.0/b.total_votes_of_pc *100 as decimal(10,2)) as result_19
+from pc_total_14 a
+inner join pc_total_19 b on a.pc_name=b.pc_name and a.state=b.state
+inner join party_total_14 c on a.pc_name=c.pc_name
+inner join party_total_19 d on d.pc_name=b.pc_name 
+)
+
+select top 5 state,constituency,party,(result_19-result_14) as gain_in_vote_share
+from result
+order by gain_in_vote_share 
+
+
+This is same as the previous query where the last select statement is in asc order.
+
+------------------------------------------------------------------------------------------------
+
+10. Which constituency has voted the most for NOTA?
+
+select top 1  pc_name,state,party,sum(total_votes) as total_vote_for_nota from results_2014
+where party='NOTA'
+group by pc_name,state,party
+order by total_vote_for_nota desc
+
+
+select top 1  pc_name,state,party,sum(total_votes) as total_vote_for_nota from results_2019
+where party='NOTA'
+group by pc_name,state,party
+order by total_vote_for_nota desc
+
+
+------------------------------------------------------------------------------------------------
+
+1 1 . Which constituencies have elected candidates whose party has less than 10% vote
+share at state level in 2019?
+
+use Learn
+
+;with winner_candidate as(
+select distinct state,pc_name,party,candidate,sum(total_votes)as total_votes_for_candidates,
+DENSE_RANK()over(partition by pc_name order by sum(total_votes) desc) as rnk
+from results_2019
+--where state='Tamil nadu'
+group by pc_name,candidate,party,state)
+
+
+, total_state_votes as(---to get total votes for induvidual state
+select distinct state,sum(total_votes) as total_votes_of_state
+from results_2019
+--where state='tamil nadu'	
+group by state
+)
+
+,total_party_votes as(---to get total votes for induvidual party for each state
+select distinct state,party,sum(total_votes) as total_votes_party
+from results_2019 
+--where state='tamil nadu'
+group by party,state)
+
+,result as(
+select distinct a.state,a.pc_name,a.candidate,c.party,a.rnk,
+cast((c.total_votes_party*1.0)/b.total_votes_of_state*100 as decimal(10,2)) as vote_percentage
+from results_2019 e 
+inner join winner_candidate a on a.pc_name=e.pc_name and a.state=e.state and a.party=e.party and a.candidate=e.candidate
+inner join total_state_votes b on e.state=b.state
+inner join total_party_votes c on c.party=e.party and b.state=c.state
+where rnk=1
+)
+
+select * from result where vote_percentage<10  order by state
