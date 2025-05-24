@@ -92,3 +92,16 @@ This project explores structured datasets of India's 2014 and 2019 general elect
 ---
 
 ## 📁 Folder Structure (Recommended)
+election-analytics/
+│
+├── data/
+│ ├── raw/ # Source CSV files
+│ └── processed/ # Cleaned or merged datasets
+│
+├── outputs/
+│ ├── charts/ # Optional visual summaries
+│ └── summary_tables/ # Excel files or .csv with final tables
+│
+├── notebooks/ # Optional Jupyter or SQL notebooks
+│
+└── README.md # Documentation (this file)
